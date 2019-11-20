@@ -107,4 +107,79 @@ confusionMatrix(svm_test, reference = test_classification$Class)
 
 1. Choose an appropriate machine learning dataset and use SVM with two different kernels. Campare the results. 
 
+I used the famous iris dataset. The iris dataset contains 3 species of flowers so, for simplification, I turned it into a binary classification problem and divided the classes into setosa vs. not_setosa. This led to a slightly imbalanced dataset as now we had twice as many observations in one class than the other but this shouldn't affect the results too much.
+
+The linear model returned a perfect AUC of 1. While this AUC may be questionable with a larger dataset, using  the toy iris dataset that contained only 150 observations and then made into an even smaller training set, this outcome is reasonable. Not a single observation was miclassified.
+
+The radial model returned similar results with only one misclassified observation leading to an overall AUC of 0.99. This too is to be expected with a toy dataset with so few observations. 
+
+```{r}
+data("iris")
+df = iris
+df$Species = as.character(df$Species)
+df$Species[df$Species == "versicolor"] = "not_setosa"
+df$Species[df$Species == "virginica"] = "not_setosa"
+df$Species = as.factor(df$Species)
+numbers = sample(c(1:nrow(df)), 0.7*nrow(df))
+train = df[numbers,]
+test = df[-numbers,]
+
+#Setting up CV
+control = trainControl(method = "repeatedcv", repeats = 5, classProbs = T, savePredictions = T)
+
+#SVM Linear model
+svm_linear = train(Species ~ ., data = train, method = "svmLinear", tuneLength = 10, trControl = control)
+
+#ROC
+roc(predictor = svm_linear$pred$setosa, response = svm_linear$pred$obs)$auc
+
+plot(x = roc(predictor = svm_linear$pred$setosa, response = svm_linear$pred$obs)$specificities, y = roc(predictor = svm_linear$pred$setosa, response = svm_linear$pred$obs)$sensitivities, col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity", xlab = "Specificity")
+
+confusionMatrix(svm_linear)
+
+#Test Set
+svm_linear_test = predict(svm_linear, test)
+confusionMatrix(svm_linear_test, test$Species)
+
+
+
+#SVM Radial Model
+svm_radial = train(Species ~ ., data = train, method = "svmRadial", tuneLength = 10, trControl = control)
+
+#ROC
+roc(predictor = svm_radial$pred$setosa, response = svm_radial$pred$obs)$auc
+
+confusionMatrix(svm_radial)
+
+#Test Set
+svm_radial_test = predict(svm_radial, test)
+confusionMatrix(svm_radial_test, test$Species)
+
+
+```
+
 2. Attempt using SVM after using a previously covered feature selection method. Do the results improve? Explain. 
+
+I created a randomForest model to determine which variables were the most important in determining the outcomes. Petal.Width and Petal.Length were the most important variables and so those were the two used to build the model. The previous radial model misclassified one prediction however, using only the two best variables, all of the observations were correctly classified. This is actually contradictory to what I expected as, typically, including more variables into the model should serve to reduce the bias and vice versa. 
+
+```{r}
+library(randomForest)
+rf = randomForest(Species ~., data = df)
+varImpPlot(rf)
+
+#SVM Linear model
+svm_radial = train(Species ~ Petal.Width + Petal.Length, data = train, method = "svmRadial", tuneLength = 10, trControl = control)
+
+#ROC
+roc(predictor = svm_radial$pred$setosa, response = svm_radial$pred$obs)$auc
+
+plot(x = roc(predictor = svm_radial$pred$setosa, response = svm_radial$pred$obs)$specificities, y = roc(predictor = svm_radial$pred$setosa, response = svm_radial$pred$obs)$sensitivities, col= "blue", xlim = c(1, 0), type ="l", ylab = "Sensitivity", xlab = "Specificity")
+
+confusionMatrix(svm_linear)
+
+#Test Set
+svm_radial_test = predict(svm_radial, test)
+confusionMatrix(svm_radial_test, test$Species)
+
+
+```
